@@ -1,261 +1,134 @@
-/**
- * ================================================================
- * MAKHUZA EDUCATIONAL CONSULTANTS — Main JavaScript
- * Responsibilities:
- *   1. Navbar scroll state
- *   2. Mobile drawer toggle
- *   3. Hero word-by-word text reveal
- *   4. Scroll-reveal (IntersectionObserver)
- *   5. Counter / stat animations
- *   6. Parallax hero background
- *   7. FAQ accordion
- *   8. Contact form validation + submit
- *   9. Back-to-top button
- *  10. Active nav link detection
- *  11. Page-load fade
- * ================================================================
- */
+/* MAKHUZA EDUCATIONAL CONSULTANTS — Interactions · v1.0 · 2026 */
+(function(){
+  'use strict';
+  const $  = (s, el=document) => el.querySelector(s);
+  const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
 
-(function () {
-  "use strict";
-
-  /* ─── 1. NAVBAR SCROLL STATE ─────────────────────────────────── */
-  const navbar = document.getElementById("navbar");
-
-  function handleNavbarScroll() {
-    if (!navbar) return;
-    if (window.scrollY > 60) {
-      navbar.classList.add("scrolled");
-    } else {
-      navbar.classList.remove("scrolled");
-    }
+  // NAV scroll state + mobile
+  const nav = $('.nav'), navToggle = $('.nav-toggle'), navMobile = $('.nav-mobile');
+  const onScroll = () => { if (nav) nav.classList.toggle('scrolled', window.scrollY > 12); };
+  window.addEventListener('scroll', onScroll, {passive: true});
+  onScroll();
+  if (navToggle){
+    navToggle.addEventListener('click', () => {
+      const open = navToggle.classList.toggle('open');
+      if (navMobile) navMobile.classList.toggle('open', open);
+      document.body.style.overflow = open ? 'hidden' : '';
+    });
+    $$('.nav-mobile a').forEach(a => a.addEventListener('click', () => {
+      navToggle.classList.remove('open'); navMobile && navMobile.classList.remove('open');
+      document.body.style.overflow = '';
+    }));
   }
 
-  window.addEventListener("scroll", handleNavbarScroll, { passive: true });
-  handleNavbarScroll(); // run on load
+  // REVEAL
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }});
+  }, {threshold: 0.12, rootMargin: '0px 0px -40px 0px'});
+  $$('.reveal').forEach(el => io.observe(el));
 
-  /* ─── 2. MOBILE DRAWER TOGGLE ────────────────────────────────── */
-  const navToggle = document.querySelector(".nav-toggle");
-  const navDrawer = document.querySelector(".nav-drawer");
+  // HERO CAROUSEL
+  const carousel = $('.carousel');
+  if (carousel){
+    const slides = $$('.carousel-slide', carousel);
+    const dots = $$('.carousel-dot', carousel);
+    const numEl = $('.carousel-num', carousel);
+    const capText = $('.carousel-caption-text', carousel);
+    const capData = slides.map(s => ({eyebrow: s.dataset.eyebrow || '', title: s.dataset.title || ''}));
+    let idx = 0, timer = null;
+    const DURATION = 6000;
+    const goTo = (n) => {
+      idx = (n + slides.length) % slides.length;
+      slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+      dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+      if (numEl) numEl.textContent = String(idx+1).padStart(2,'0') + ' / ' + String(slides.length).padStart(2,'0');
+      if (capText && capData[idx]){
+        capText.innerHTML = `<span class="cap-eyebrow">${capData[idx].eyebrow}</span><h3 class="cap-title">${capData[idx].title}</h3>`;
+      }
+    };
+    const advance = () => goTo(idx + 1);
+    const restart = () => { clearInterval(timer); timer = setInterval(advance, DURATION); };
+    dots.forEach((d, i) => d.addEventListener('click', () => { goTo(i); restart(); }));
+    carousel.addEventListener('mouseenter', () => clearInterval(timer));
+    carousel.addEventListener('mouseleave', restart);
+    goTo(0);
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) restart();
+  }
 
-  if (navToggle && navDrawer) {
-    navToggle.addEventListener("click", () => {
-      const isOpen = navDrawer.classList.toggle("open");
-      navToggle.classList.toggle("open", isOpen);
-      document.body.style.overflow = isOpen ? "hidden" : "";
-    });
-
-    // Close on any drawer link click
-    navDrawer.querySelectorAll("a").forEach((link) => {
-      link.addEventListener("click", () => {
-        navDrawer.classList.remove("open");
-        navToggle.classList.remove("open");
-        document.body.style.overflow = "";
+  // COUNTERS
+  const countEls = $$('[data-count]');
+  if (countEls.length){
+    const cio = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (!e.isIntersecting) return;
+        const el = e.target;
+        const target = parseFloat(el.dataset.count);
+        const decimals = parseInt(el.dataset.decimals || '0', 10);
+        const duration = parseInt(el.dataset.duration || '1800', 10);
+        const suffix = el.dataset.suffix || '';
+        const prefix = el.dataset.prefix || '';
+        const start = performance.now();
+        const step = (now) => {
+          const p = Math.min(1, (now - start) / duration);
+          const eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = prefix + (target * eased).toFixed(decimals) + suffix;
+          if (p < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+        cio.unobserve(el);
       });
+    }, {threshold: 0.5});
+    countEls.forEach(el => cio.observe(el));
+  }
+
+  // MAGNETIC
+  $$('.magnetic').forEach(el => {
+    const strength = 0.18;
+    el.addEventListener('mousemove', (e) => {
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - (r.left + r.width/2);
+      const y = e.clientY - (r.top  + r.height/2);
+      el.style.transform = `translate(${x*strength}px, ${y*strength}px)`;
     });
-  }
-
-  /* ─── 3. HERO WORD-BY-WORD REVEAL ───────────────────────────── */
-  // Wraps each word in the hero title with .hero-word spans
-  function prepHeroWords() {
-    const title = document.querySelector(".hero-title");
-    if (!title) return;
-
-    title.querySelectorAll(".hero-title-line").forEach((line) => {
-      const words = line.textContent.trim().split(" ");
-      line.innerHTML = words
-        .map(
-          (word, i) =>
-            `<span class="hero-word" style="transition-delay:${0.08 + i * 0.08}s">${word}</span> `
-        )
-        .join("");
-    });
-
-    // Trigger after a short paint delay
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        title.querySelectorAll(".hero-word").forEach((w) => w.classList.add("visible"));
-      }, 200);
-    });
-  }
-
-  prepHeroWords();
-
-  /* ─── 4. INTERSECTION OBSERVER — SCROLL REVEALS ─────────────── */
-  // Watches elements with .reveal / .reveal-left / .reveal-right / .reveal-scale
-  // and adds .visible when they enter the viewport
-  const revealObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("visible");
-          revealObserver.unobserve(entry.target); // animate once
-        }
-      });
-    },
-    { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
-  );
-
-  function registerRevealElements() {
-    document
-      .querySelectorAll(".reveal, .reveal-left, .reveal-right, .reveal-scale")
-      .forEach((el) => revealObserver.observe(el));
-  }
-
-  registerRevealElements();
-
-  /* ─── 5. COUNTER ANIMATIONS ─────────────────────────────────── */
-  // Elements with [data-count="200"] count up from 0 when they appear
-  function animateCounter(el) {
-    const target = parseInt(el.dataset.count, 10);
-    const suffix = el.dataset.suffix || "";
-    const duration = 1800; // ms
-    const startTime = performance.now();
-
-    function step(now) {
-      const progress = Math.min((now - startTime) / duration, 1);
-      // Ease-out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      el.textContent = Math.round(eased * target) + suffix;
-      if (progress < 1) requestAnimationFrame(step);
-    }
-
-    requestAnimationFrame(step);
-  }
-
-  const counterObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          animateCounter(entry.target);
-          counterObserver.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.5 }
-  );
-
-  document.querySelectorAll("[data-count]").forEach((el) => counterObserver.observe(el));
-
-  /* ─── 6. HERO PARALLAX ───────────────────────────────────────── */
-  // Moves the hero background at 40% scroll speed for depth
-  const heroSection = document.querySelector(".hero");
-
-  function handleParallax() {
-    if (!heroSection) return;
-    const scrolled = window.scrollY;
-    heroSection.style.setProperty("--parallax-y", `${scrolled * 0.35}px`);
-  }
-
-  window.addEventListener("scroll", handleParallax, { passive: true });
-
-  /* ─── 7. FAQ ACCORDION ───────────────────────────────────────── */
-  // Opens/closes FAQ items; only one open at a time (optional)
-  document.querySelectorAll(".faq-question").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const item = btn.closest(".faq-item");
-      const isOpen = item.classList.contains("open");
-
-      // Close all
-      document.querySelectorAll(".faq-item.open").forEach((openItem) => {
-        openItem.classList.remove("open");
-      });
-
-      // Re-open if it wasn't open
-      if (!isOpen) item.classList.add("open");
-    });
+    el.addEventListener('mouseleave', () => { el.style.transform = ''; });
   });
 
-  /* ─── 8. CONTACT FORM ────────────────────────────────────────── */
-  // Basic client-side validation; the action can point to
-  // Formspree / Netlify Forms / your own backend
-  const contactForm = document.getElementById("contactForm");
+  // PRICING TABS
+  const tabs = $$('.pricing-tab');
+  if (tabs.length){
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.toggle('active', x === t));
+      $$('.pricing-panel').forEach(p => p.classList.toggle('active', p.id === t.dataset.tab));
+    }));
+  }
 
-  if (contactForm) {
-    contactForm.addEventListener("submit", async (e) => {
+  // FAQ
+  $$('.faq-q').forEach(q => q.addEventListener('click', () => {
+    const item = q.closest('.faq-item');
+    if (!item) return;
+    const open = item.classList.contains('open');
+    $$('.faq-item').forEach(i => i.classList.remove('open'));
+    if (!open) item.classList.add('open');
+  }));
+
+  // FOOTER YEAR
+  const y = $('#year'); if (y) y.textContent = new Date().getFullYear();
+
+  // CONTACT FORM
+  const form = $('#contact-form');
+  if (form){
+    form.addEventListener('submit', (e) => {
       e.preventDefault();
-
-      const submitBtn = contactForm.querySelector(".form-submit");
-      const formNote = contactForm.querySelector(".form-note");
-
-      // Simple required-field validation
-      let valid = true;
-      contactForm.querySelectorAll("[required]").forEach((field) => {
-        if (!field.value.trim()) {
-          field.style.borderColor = "#E84A4A";
-          valid = false;
-        } else {
-          field.style.borderColor = "";
-        }
-      });
-
-      if (!valid) {
-        if (formNote) formNote.textContent = "Please fill in all required fields.";
-        return;
-      }
-
-      // Optimistic UI feedback
-      if (submitBtn) {
-        submitBtn.textContent = "Sending…";
-        submitBtn.disabled = true;
-      }
-
-      try {
-        // ----------------------------------------------------------
-        // REPLACE action URL with your Formspree endpoint or backend
-        // e.g. "https://formspree.io/f/YOUR_FORM_ID"
-        // ----------------------------------------------------------
-        const response = await fetch(contactForm.action || "#", {
-          method: "POST",
-          body: new FormData(contactForm),
-          headers: { Accept: "application/json" },
-        });
-
-        if (response.ok) {
-          contactForm.innerHTML = `
-            <div style="text-align:center;padding:3rem 1rem">
-              <div style="font-size:3rem;margin-bottom:1rem">✅</div>
-              <h3 style="font-family:'Cormorant Garamond',serif;font-size:1.8rem;margin-bottom:.5rem">Message Received!</h3>
-              <p style="color:var(--text-muted)">We'll get back to you within 24 hours. In the meantime, feel free to WhatsApp us for a quicker response.</p>
-            </div>`;
-        } else {
-          throw new Error("Server error");
-        }
-      } catch {
-        if (submitBtn) { submitBtn.textContent = "Book Free Consultation"; submitBtn.disabled = false; }
-        if (formNote) formNote.textContent = "Something went wrong. Please try WhatsApp or email us directly.";
-      }
+      const btn = form.querySelector('button[type="submit"]');
+      if (!btn) return;
+      const original = btn.innerHTML;
+      btn.innerHTML = '<span>Sending…</span>';
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.innerHTML = '<span>Message sent ✓</span>';
+        form.reset();
+        setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 3500);
+      }, 900);
     });
   }
-
-  /* ─── 9. BACK-TO-TOP BUTTON ─────────────────────────────────── */
-  const backTop = document.querySelector(".back-top");
-
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (!backTop) return;
-      backTop.classList.toggle("visible", window.scrollY > 500);
-    },
-    { passive: true }
-  );
-
-  if (backTop) {
-    backTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
-  }
-
-  /* ─── 10. ACTIVE NAV LINK ────────────────────────────────────── */
-  // Highlights the nav link matching the current page URL
-  const currentPage = location.pathname.split("/").pop() || "index.html";
-
-  document.querySelectorAll(".nav-links a, .nav-drawer a").forEach((link) => {
-    const href = link.getAttribute("href") || "";
-    if (href === currentPage || href === "./" + currentPage) {
-      link.classList.add("active");
-    }
-  });
-
-  /* ─── 11. PAGE-LOAD FADE ─────────────────────────────────────── */
-  document.body.classList.add("page-fade");
-
 })();
